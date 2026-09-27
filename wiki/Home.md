@@ -6,16 +6,16 @@ Welcome to the official documentation for **Toxic Productivity Bot**, the Telegr
 
 ## 📚 Wiki Contents
 
-1. [BotFather Setup Guide](BotFather-Setup.md)  
+1. **[[BotFather Setup Guide|BotFather-Setup]]**  
    Step-by-step instructions on obtaining your Telegram Bot token, enabling inline queries, and configuring command menus.
 
-2. [User Usage Guide](Usage-Guide.md)  
+2. **[[User Usage Guide|Usage-Guide]]**  
    Complete guide to registering, logging productive work and wasted time, reading daily summaries, and competing on the leaderboard.
 
-3. [Workday & Schedule Configuration](Workdays-and-Scheduling.md)  
+3. **[[Workday & Schedule Configuration|Workdays-and-Scheduling]]**  
    How to configure working hours, set customized workdays (e.g., weekends off, Sundays off), and schedule planned days off.
 
-4. [Deployment & Architecture](Deployment-and-Architecture.md)  
+4. **[[Deployment & Architecture|Deployment-and-Architecture]]**  
    Architecture breakdown (SQLAlchemy ORM, Python-Telegram-Bot, APScheduler), Docker deployment, systemd service configuration, and environment setup.
 
 ---
