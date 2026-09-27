@@ -102,3 +102,28 @@ def get_weekly_award(rank: int, work_hours: float, waste_hours: float) -> str:
         return "🦥 Ghost Employee Award (Are you even on payroll?)"
     else:
         return "💼 Standard Corporate Drone (You exist, barely)"
+
+
+DELETE_LOG_QUOTES = [
+    "Erasing the evidence? Your manager might not know, but your conscience does.",
+    "Entry deleted. If only erasing all your other life mistakes was that convenient.",
+    "Poof! Gone. We will pretend you never logged that, but we both know the truth.",
+    "Deleted. Trying to doctor your metrics? A classic corporate defense mechanism.",
+    "Record obliterated. Don't worry, your secrets are safe with me... for now.",
+]
+
+UNDO_LOG_QUOTES = [
+    "Undid your last entry. Changed your mind, or did reality catch up with you?",
+    "Last log reverted. Mark this moment: you actually admitted to a mistake.",
+    "Undone! Back to the drawing board of productivity.",
+    "Reverted. If only you could undo the time spent thinking about it.",
+]
+
+def get_delete_quote() -> str:
+    """Returns a sarcastic quote when a log is deleted."""
+    return random.choice(DELETE_LOG_QUOTES)
+
+def get_undo_quote() -> str:
+    """Returns a sarcastic quote when undoing the last entry."""
+    return random.choice(UNDO_LOG_QUOTES)
+

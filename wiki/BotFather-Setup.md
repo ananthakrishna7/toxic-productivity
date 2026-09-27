@@ -55,6 +55,10 @@ To give users an autocomplete `/` menu with full command descriptions in Telegra
 3. Paste the following command list:
    ```text
    log - Record work or waste: /log work coding 2h
+   undo - Revert most recently logged activity
+   delete - Delete an entry by ID: /delete 12
+   edit - Edit an entry: /edit 12 [changes]
+   logs - View recent activity history with IDs
    summary - View today's summary & toxic roast
    leaderboard - View today's community leaderboard
    weekly - View 7-day stats & toxic trophy

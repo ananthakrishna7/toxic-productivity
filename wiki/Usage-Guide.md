@@ -62,15 +62,61 @@ You can use the bot inside **any chat or group** by typing `@your_bot_name` in t
 
 ### B. Interactive Inline Buttons
 Every summary and reminder includes 1-tap interactive inline buttons:
-- `[ 💼 +1h Work ]`: Instantly logs 1 hour of productive work.
-- `[ 🗑️ +1h Waste ]`: Instantly logs 1 hour of slacking.
+- `[ 💼 +1h Work ]`: Prompts you to reply with what you worked on, or tap **Skip Description** to record 1 hour without entering details.
+- `[ 🗑️ +1h Waste ]`: Prompts you to reply with how you slacked off, or tap **Skip Description** to record 1 hour without entering details.
 - `[ 📊 Today's Summary ]`: Refreshes your today's metrics.
 - `[ 🏆 Leaderboard ]`: Fetches latest leaderboard rankings.
 - `[ 📈 Weekly Stats ]`: Shows your weekly progress.
+- `[ 📅 My Schedule ]`: Displays your configured hours and days.
 
 ---
 
-## 4. Daily Summaries & Leaderboard
+## 4. Correcting & Deleting Entries
+
+Made a typo? Logged hours to the wrong category? Toxic Productivity Bot gives you full control to fix mistakes:
+
+### Revert the Last Entry (`/undo`)
+To immediately delete whatever you most recently logged:
+```text
+/undo
+```
+The bot removes the last entry and recalculates your metrics.
+
+### Delete by ID (`/delete`)
+Every entry in your `/summary` and `/logs` list has an ID tag (e.g. `[#14]`). To delete a specific entry:
+```text
+/delete 14
+/del 14
+```
+
+### Edit an Existing Entry (`/edit`)
+You can modify the hours, description, or activity type of any past entry:
+```text
+/edit <id> [work|waste] [description] [hours]
+```
+- **Change hours only:**
+  ```text
+  /edit 14 3.0
+  ```
+- **Change task description only:**
+  ```text
+  /edit 14 Refactored authentication middleware
+  ```
+- **Change category, description, and hours:**
+  ```text
+  /edit 14 waste Watching tech talk 1.5
+  ```
+
+### View Recent Log History (`/logs`)
+To view your last 10 entries along with their IDs and dates:
+```text
+/logs
+/entries
+```
+
+---
+
+## 5. Daily Summaries & Leaderboard
 
 ### End of Day (EoD) Summary
 - Trigger on-demand at any time: `/summary` or `/today` or `/eod`.

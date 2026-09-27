@@ -550,3 +550,124 @@ def is_within_work_hours(user: User, current_time: Optional[time] = None) -> boo
             return now_t >= start_t or now_t <= end_t
     except Exception:
         return True
+
+
+def get_user_recent_logs(
+    session: Session, user: User, limit: int = 10
+) -> List[WorkLog]:
+    """Retrieves the most recent activity logs for a user."""
+    stmt = (
+        select(WorkLog)
+        .where(WorkLog.user_id == user.id)
+        .order_by(WorkLog.created_at.desc(), WorkLog.id.desc())
+        .limit(limit)
+    )
+    return list(session.execute(stmt).scalars().all())
+
+
+def undo_last_work_log(session: Session, user: User) -> Optional[WorkLog]:
+    """Deletes and returns the most recently logged entry for the user."""
+    stmt = (
+        select(WorkLog)
+        .where(WorkLog.user_id == user.id)
+        .order_by(WorkLog.created_at.desc(), WorkLog.id.desc())
+        .limit(1)
+    )
+    last_log = session.execute(stmt).scalar_one_or_none()
+    if not last_log:
+        return None
+
+    # Detach / extract attributes before deletion
+    deleted_copy = WorkLog(
+        id=last_log.id,
+        user_id=last_log.user_id,
+        log_type=last_log.log_type,
+        description=last_log.description,
+        hours=last_log.hours,
+        date=last_log.date,
+        created_at=last_log.created_at,
+    )
+    session.delete(last_log)
+    session.commit()
+    return deleted_copy
+
+
+def delete_work_log(session: Session, user: User, log_id: int) -> Optional[WorkLog]:
+    """Deletes a specific work log entry by ID if owned by user."""
+    stmt = select(WorkLog).where(WorkLog.id == log_id, WorkLog.user_id == user.id)
+    entry = session.execute(stmt).scalar_one_or_none()
+    if not entry:
+        return None
+
+    deleted_copy = WorkLog(
+        id=entry.id,
+        user_id=entry.user_id,
+        log_type=entry.log_type,
+        description=entry.description,
+        hours=entry.hours,
+        date=entry.date,
+        created_at=entry.created_at,
+    )
+    session.delete(entry)
+    session.commit()
+    return deleted_copy
+
+
+def parse_edit_input(args_tokens: List[str], current_log: WorkLog) -> Tuple[str, str, float]:
+    """Parses edit command tokens into updated (log_type, description, hours).
+
+    Allows partial updates, retaining current_log's values for omitted fields.
+    """
+    if not args_tokens:
+        raise ValueError("No changes provided. Usage: `/edit <id> [work|waste] [description] [hours]`")
+
+    new_type = current_log.log_type
+    new_hours = current_log.hours
+    new_desc_tokens = []
+
+    def try_parse_hours(token: str) -> Optional[float]:
+        t = token.lower().rstrip("h").rstrip("hrs").rstrip("hr")
+        try:
+            val = float(t)
+            return val if val > 0 else None
+        except ValueError:
+            return None
+
+    for token in args_tokens:
+        clean = token.lower()
+        if clean in ("work", "w", "job", "study", "productive"):
+            new_type = "work"
+        elif clean in ("waste", "slacking", "slack", "distraction", "procrastination"):
+            new_type = "waste"
+        else:
+            parsed_h = try_parse_hours(token)
+            if parsed_h is not None and (new_hours == current_log.hours or len(new_desc_tokens) > 0):
+                new_hours = parsed_h
+            else:
+                new_desc_tokens.append(token)
+
+    new_desc = " ".join(new_desc_tokens).strip() if new_desc_tokens else current_log.description
+    return new_type, new_desc, round(new_hours, 2)
+
+
+def edit_work_log(
+    session: Session,
+    user: User,
+    log_id: int,
+    log_type: str,
+    description: str,
+    hours: float,
+) -> Optional[WorkLog]:
+    """Updates an existing work log entry owned by user."""
+    stmt = select(WorkLog).where(WorkLog.id == log_id, WorkLog.user_id == user.id)
+    entry = session.execute(stmt).scalar_one_or_none()
+    if not entry:
+        return None
+
+    entry.log_type = log_type
+    entry.description = description
+    entry.hours = hours
+    session.commit()
+    session.refresh(entry)
+    return entry
+

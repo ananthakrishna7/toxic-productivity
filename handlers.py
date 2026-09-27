@@ -11,6 +11,7 @@ import logging
 from datetime import date
 from typing import Callable
 
+from sqlalchemy import select
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -22,6 +23,7 @@ from telegram.ext import ContextTypes
 
 import services
 import toxic_quotes
+from models import WorkLog
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +166,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/summary` or `/today` — View your today's breakdown and toxic roast\n"
         "• `/leaderboard` — Compare today's output with all users\n"
         "• `/weekly` or `/stats` — View your 7-day stats and toxic trophy\n\n"
+        "🛠️ *Corrections & Entry Management:*\n"
+        "• `/undo` — Immediately delete your most recently logged activity\n"
+        "• `/delete <id>` — Delete a specific entry by ID (e.g. `/delete 12`)\n"
+        "• `/edit <id> [changes]` — Modify hours, task, or type (e.g. `/edit 12 3h`)\n"
+        "• `/logs` — View recent activity history with IDs\n\n"
         "⚙️ *Schedule & Workdays:*\n"
         "• `/workdays <spec>` — Set days (e.g. `weekdays`, `sundays-off`, `mon,wed,fri`)\n"
         "• `/workhours <start>-<end>` — Set hours (e.g. `/workhours 09:00-18:00`)\n"
@@ -258,11 +265,12 @@ def format_daily_summary_text(summary: dict, user_name: str) -> str:
         lines.append("📋 *Activity Log:*")
         for idx, entry in enumerate(logs, 1):
             icon = "💼" if entry.log_type == "work" else "🗑️"
-            lines.append(f"{idx}. {icon} `{entry.description}` ({entry.hours:.1f}h)")
+            lines.append(f"{idx}. `[#{entry.id}]` {icon} `{entry.description}` ({entry.hours:.1f}h)")
     else:
         lines.append("🕸️ *No activities logged today. Peak laziness detected.*")
 
     lines.append(f"\n_{nudge}_")
+    lines.append("\n💡 _Mistake? Use /undo, /delete <id>, or /edit <id> [changes]._")
     return "\n".join(lines)
 
 
@@ -648,24 +656,90 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
             return
 
         if data == "quick_work_1":
-            services.add_work_log(session, user, "work", "Quick Work Log", 1.0, date.today())
-            nudge = toxic_quotes.get_work_quote(1.0, "Quick Work Log")
+            context.user_data["pending_log"] = {"type": "work", "hours": 1.0}
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("⏩ Skip Description", callback_data="skip_desc_work_1"),
+                    InlineKeyboardButton("❌ Cancel", callback_data="cancel_pending_log"),
+                ]
+            ])
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"💼 *Logged 1.0h of Work!*\n_{nudge}_",
-                reply_markup=get_main_keyboard(),
+                text=(
+                    "💼 *Logging 1.0h of Work*\n\n"
+                    "Please reply with what you worked on (e.g. `Fixed auth bugs` or `Documentation`).\n\n"
+                    "Or tap **Skip Description** to log it without entering details:"
+                ),
+                reply_markup=keyboard,
                 parse_mode="Markdown",
             )
+            return
 
         elif data == "quick_waste_1":
-            services.add_work_log(session, user, "waste", "Quick Slacking", 1.0, date.today())
-            nudge = toxic_quotes.get_waste_quote(1.0, "Quick Slacking")
+            context.user_data["pending_log"] = {"type": "waste", "hours": 1.0}
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("⏩ Skip Description", callback_data="skip_desc_waste_1"),
+                    InlineKeyboardButton("❌ Cancel", callback_data="cancel_pending_log"),
+                ]
+            ])
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🗑️ *Logged 1.0h of Waste!*\n_{nudge}_",
+                text=(
+                    "🗑️ *Logging 1.0h of Waste*\n\n"
+                    "Please reply with how you slacked off (e.g. `Doomscrolling Twitter` or `Cat videos`).\n\n"
+                    "Or tap **Skip Description** to log it without entering details:"
+                ),
+                reply_markup=keyboard,
+                parse_mode="Markdown",
+            )
+            return
+
+        elif data == "skip_desc_work_1":
+            context.user_data.pop("pending_log", None)
+            log = services.add_work_log(session, user, "work", "General Work", 1.0, date.today())
+            nudge = toxic_quotes.get_work_quote(1.0, "General Work")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"💼 *WORK LOGGED (ID #{log.id}):*\n"
+                    f"• *Task:* `General Work`\n"
+                    f"• *Duration:* `1.0 hours`\n\n"
+                    f"_{nudge}_\n\n"
+                    f"💡 _Tip: Made a mistake? Type /undo to revert._"
+                ),
                 reply_markup=get_main_keyboard(),
                 parse_mode="Markdown",
             )
+            return
+
+        elif data == "skip_desc_waste_1":
+            context.user_data.pop("pending_log", None)
+            log = services.add_work_log(session, user, "waste", "General Slacking", 1.0, date.today())
+            nudge = toxic_quotes.get_waste_quote(1.0, "General Slacking")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"🗑️ *WASTE LOGGED (ID #{log.id}):*\n"
+                    f"• *Task:* `General Slacking`\n"
+                    f"• *Duration:* `1.0 hours`\n\n"
+                    f"_{nudge}_\n\n"
+                    f"💡 _Tip: Made a mistake? Type /undo to revert._"
+                ),
+                reply_markup=get_main_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
+
+        elif data == "cancel_pending_log":
+            context.user_data.pop("pending_log", None)
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="❌ Activity logging cancelled. Slacking continues unchecked.",
+                reply_markup=get_main_keyboard(),
+                parse_mode="Markdown",
+            )
+            return
 
         elif data == "view_summary":
             summary = services.get_daily_summary(session, user, date.today())
@@ -719,6 +793,211 @@ async def button_callback_handler(update: Update, context: ContextTypes.DEFAULT_
                 reply_markup=get_main_keyboard(),
                 parse_mode="Markdown",
             )
+
+
+async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles text messages, fulfilling pending log descriptions."""
+    chat = update.effective_chat
+    if not chat or not update.message or not update.message.text:
+        return
+
+    pending = context.user_data.pop("pending_log", None)
+    if not pending:
+        return
+
+    log_type = pending.get("type", "work")
+    hours = pending.get("hours", 1.0)
+    desc = update.message.text.strip()
+
+    with get_db_session(context) as session:
+        user = services.get_user_by_chat_id(session, chat.id)
+        if not user or not user.is_active:
+            await context.bot.send_message(
+                chat_id=chat.id,
+                text="Please run `/start` to register first.",
+                parse_mode="Markdown",
+            )
+            return
+        log = services.add_work_log(session, user, log_type, desc, hours, date.today())
+
+    icon = "💼" if log_type == "work" else "🗑️"
+    nudge = (
+        toxic_quotes.get_work_quote(hours, desc)
+        if log_type == "work"
+        else toxic_quotes.get_waste_quote(hours, desc)
+    )
+
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            f"{icon} *{log_type.upper()} LOGGED (ID #{log.id}):*\n"
+            f"• *Task:* `{desc}`\n"
+            f"• *Duration:* `{hours:.1f} hours`\n\n"
+            f"_{nudge}_\n\n"
+            f"💡 _Tip: Made a mistake? Type /undo to revert._"
+        ),
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+@require_registration
+async def undo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles /undo. Reverts the most recently logged activity for the user."""
+    chat = update.effective_chat
+    with get_db_session(context) as session:
+        user = services.get_user_by_chat_id(session, chat.id)
+        deleted = services.undo_last_work_log(session, user)
+
+    if not deleted:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text="❓ *Nothing to undo:* You have no recorded activities in the database.",
+            parse_mode="Markdown",
+        )
+        return
+
+    nudge = toxic_quotes.get_undo_quote()
+    icon = "💼" if deleted.log_type == "work" else "🗑️"
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            f"↩️ *REVERTED ENTRY (ID #{deleted.id}):*\n"
+            f"Removed {icon} `{deleted.description}` ({deleted.hours:.1f}h on {deleted.date}).\n\n"
+            f"_{nudge}_"
+        ),
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+@require_registration
+async def delete_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles /delete <id>. Deletes a specific work log entry by ID."""
+    chat = update.effective_chat
+    if not context.args:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text="⚠️ Usage: `/delete <id>`\nExample: `/delete 12` (View IDs in `/summary` or `/logs`).",
+            parse_mode="Markdown",
+        )
+        return
+
+    try:
+        log_id = int(context.args[0].lstrip("#"))
+    except ValueError:
+        await context.bot.send_message(chat_id=chat.id, text="⚠️ Please provide a valid numeric ID.")
+        return
+
+    with get_db_session(context) as session:
+        user = services.get_user_by_chat_id(session, chat.id)
+        deleted = services.delete_work_log(session, user, log_id)
+
+    if not deleted:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"⚠️ Entry `#{log_id}` was not found or does not belong to your account.",
+            parse_mode="Markdown",
+        )
+        return
+
+    nudge = toxic_quotes.get_delete_quote()
+    icon = "💼" if deleted.log_type == "work" else "🗑️"
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            f"🗑️ *DELETED ENTRY (ID #{deleted.id}):*\n"
+            f"Deleted {icon} `{deleted.description}` ({deleted.hours:.1f}h).\n\n"
+            f"_{nudge}_"
+        ),
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+@require_registration
+async def edit_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles /edit <id> [changes]. Modifies an existing work log entry."""
+    chat = update.effective_chat
+    if not context.args or len(context.args) < 2:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=(
+                "✏️ *Edit a Log Entry:*\n"
+                "Usage: `/edit <id> [work|waste] [description] [hours]`\n\n"
+                "Examples:\n"
+                "• `/edit 12 2.5` — Changes hours to 2.5\n"
+                "• `/edit 12 refactoring auth` — Changes description\n"
+                "• `/edit 12 waste doomscrolling 1.5` — Changes type, description & hours"
+            ),
+            parse_mode="Markdown",
+        )
+        return
+
+    try:
+        log_id = int(context.args[0].lstrip("#"))
+    except ValueError:
+        await context.bot.send_message(chat_id=chat.id, text="⚠️ Please provide a valid numeric ID.")
+        return
+
+    with get_db_session(context) as session:
+        user = services.get_user_by_chat_id(session, chat.id)
+        stmt = select(WorkLog).where(WorkLog.id == log_id, WorkLog.user_id == user.id)
+        current_log = session.execute(stmt).scalar_one_or_none()
+        if not current_log:
+            await context.bot.send_message(
+                chat_id=chat.id,
+                text=f"⚠️ Entry `#{log_id}` was not found or does not belong to your account.",
+                parse_mode="Markdown",
+            )
+            return
+
+        try:
+            new_type, new_desc, new_hours = services.parse_edit_input(context.args[1:], current_log)
+        except ValueError as e:
+            await context.bot.send_message(chat_id=chat.id, text=f"⚠️ {e}")
+            return
+
+        updated = services.edit_work_log(session, user, log_id, new_type, new_desc, new_hours)
+
+    icon = "💼" if updated.log_type == "work" else "🗑️"
+    await context.bot.send_message(
+        chat_id=chat.id,
+        text=(
+            f"✏️ *UPDATED ENTRY (ID #{updated.id}):*\n"
+            f"• *Type:* {icon} `{updated.log_type.upper()}`\n"
+            f"• *Task:* `{updated.description}`\n"
+            f"• *Hours:* `{updated.hours:.1f} hrs`\n\n"
+            f"_Metrics adjusted. Try to get it right the first time next time._"
+        ),
+        reply_markup=get_main_keyboard(),
+        parse_mode="Markdown",
+    )
+
+
+@require_registration
+async def logs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles /logs or /entries. Displays recent activity logs with IDs."""
+    chat = update.effective_chat
+    with get_db_session(context) as session:
+        user = services.get_user_by_chat_id(session, chat.id)
+        recent = services.get_user_recent_logs(session, user, limit=10)
+
+    if not recent:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text="🕸️ No logged activities found. Truly doing nothing.",
+            parse_mode="Markdown",
+        )
+        return
+
+    lines = ["📋 *RECENT ACTIVITY LOGS:*"]
+    for r in recent:
+        icon = "💼" if r.log_type == "work" else "🗑️"
+        lines.append(f"• `[#{r.id}]` {icon} *{r.description}* — `{r.hours:.1f}h` ({r.date})")
+
+    lines.append("\n💡 _To correct an entry: /edit <id> [changes] or /delete <id> or /undo._")
+    await context.bot.send_message(chat_id=chat.id, text="\n".join(lines), parse_mode="Markdown")
 
 
 async def inline_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

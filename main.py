@@ -18,6 +18,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     InlineQueryHandler,
+    MessageHandler,
+    filters,
 )
 
 import handlers
@@ -39,6 +41,10 @@ async def post_init(application: Application):
     """Sets bot commands in Telegram menu on bot startup."""
     commands = [
         BotCommand("log", "Log activity: /log work coding 2.5"),
+        BotCommand("undo", "Revert most recently logged activity"),
+        BotCommand("delete", "Delete an entry by ID: /delete 12"),
+        BotCommand("edit", "Edit an entry: /edit 12 [changes]"),
+        BotCommand("logs", "View recent activity history with IDs"),
         BotCommand("summary", "View today's summary & toxic roast"),
         BotCommand("leaderboard", "View today's community leaderboard"),
         BotCommand("weekly", "View 7-day stats & toxic trophy"),
@@ -73,6 +79,10 @@ def build_application(token: str, session_factory=None) -> Application:
     application.add_handler(CommandHandler("register", handlers.register))
     application.add_handler(CommandHandler("help", handlers.help_command))
     application.add_handler(CommandHandler("log", handlers.log_command))
+    application.add_handler(CommandHandler("undo", handlers.undo_command))
+    application.add_handler(CommandHandler(["delete", "del", "remove"], handlers.delete_command))
+    application.add_handler(CommandHandler("edit", handlers.edit_command))
+    application.add_handler(CommandHandler(["logs", "entries"], handlers.logs_command))
     application.add_handler(CommandHandler(["summary", "today", "eod"], handlers.summary_command))
     application.add_handler(CommandHandler("leaderboard", handlers.leaderboard_command))
     application.add_handler(CommandHandler(["weekly", "stats"], handlers.weekly_command))
@@ -86,6 +96,9 @@ def build_application(token: str, session_factory=None) -> Application:
 
     # Register Callback Query Handler for Inline Buttons
     application.add_handler(CallbackQueryHandler(handlers.button_callback_handler))
+
+    # Register Text Message Handler for interactive description input
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.text_message_handler))
 
     # Register Inline Query Handler for @bot queries
     application.add_handler(InlineQueryHandler(handlers.inline_query_handler))

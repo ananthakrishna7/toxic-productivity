@@ -93,6 +93,10 @@ python main.py
 | `/start` | — | Register and get toxic greeting | `/start` |
 | `/register` | `[name]` | Register or update display name | `/register Neo` |
 | `/log` | `<type> <desc> <hours>` | Log work or waste | `/log work coding bot 2.5` |
+| `/undo` | — | Immediately revert most recent entry | `/undo` |
+| `/delete` | `<id>` | Delete an entry by ID | `/delete 14` (aliases: `/del`, `/remove`) |
+| `/edit` | `<id> [changes]` | Modify task, hours, or type | `/edit 14 3.0` or `/edit 14 Refactored API` |
+| `/logs` | — | View recent activity history with IDs | `/logs` (alias: `/entries`) |
 | `/summary` | — | Personal today's summary & roast | `/summary` (aliases: `/today`, `/eod`) |
 | `/leaderboard`| — | Community leaderboard for today | `/leaderboard` |
 | `/weekly` | — | 7-day stats and toxic trophy | `/weekly` (alias: `/stats`) |
@@ -109,7 +113,10 @@ python main.py
 
 ## 💡 Inlining Support
 
-Type `@your_bot_name` in any chat window to access instant inline options:
+- **Interactive Inline Buttons**:
+  - `[💼 +1h Work]` & `[🗑️ +1h Waste]`: Prompts you for what you worked on, with a **Skip Description** button for 1-tap default logging.
+  - `[📊 Today's Summary]`, `[🏆 Leaderboard]`, `[📈 Weekly Stats]`, `[📅 My Schedule]`.
+- **Inline Queries**: Type `@your_bot_name` in any chat window to access instant inline options:
 
 ```text
 @toxic_productivity_bot

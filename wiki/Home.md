@@ -27,6 +27,10 @@ Welcome to the official documentation for **Toxic Productivity Bot**, the Telegr
 | `/start` | Register yourself into the rat race |
 | `/log work <task> <hours>` | Record productive work hours |
 | `/log waste <task> <hours>` | Confess your procrastination hours |
+| `/undo` | Immediately revert most recent entry |
+| `/delete <id>` | Delete a specific entry by ID |
+| `/edit <id> [changes]` | Modify an entry's task, hours, or type |
+| `/logs` | View recent entries with ID tags |
 | `/summary` (or `/today`) | View today's personal summary and toxic roast |
 | `/leaderboard` | Inspect the daily community leaderboard |
 | `/weekly` (or `/stats`) | View 7-day performance breakdown and toxic award |

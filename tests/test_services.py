@@ -204,3 +204,64 @@ def test_is_within_work_hours(sample_user: User):
     assert services.is_within_work_hours(sample_user, time(17, 59)) is True
     assert services.is_within_work_hours(sample_user, time(8, 59)) is False
     assert services.is_within_work_hours(sample_user, time(18, 30)) is False
+
+
+def test_undo_last_work_log(db_session: Session, sample_user: User):
+    """Test undoing the most recently created log."""
+    assert services.undo_last_work_log(db_session, sample_user) is None
+
+    log1 = services.add_work_log(db_session, sample_user, "work", "First task", 1.0)
+    log2 = services.add_work_log(db_session, sample_user, "waste", "Second task", 2.0)
+
+    undone = services.undo_last_work_log(db_session, sample_user)
+    assert undone is not None
+    assert undone.id == log2.id
+    assert undone.description == "Second task"
+
+    # Only log1 remains
+    remaining = services.get_user_recent_logs(db_session, sample_user)
+    assert len(remaining) == 1
+    assert remaining[0].id == log1.id
+
+
+def test_delete_work_log(db_session: Session, sample_user: User):
+    """Test deleting an entry by ID, and enforcing user ownership."""
+    log1 = services.add_work_log(db_session, sample_user, "work", "Task A", 1.5)
+    log2 = services.add_work_log(db_session, sample_user, "work", "Task B", 2.5)
+
+    # Deleting non-existent log returns None
+    assert services.delete_work_log(db_session, sample_user, 99999) is None
+
+    # Deleting existing log succeeds
+    deleted = services.delete_work_log(db_session, sample_user, log1.id)
+    assert deleted is not None
+    assert deleted.id == log1.id
+
+    remaining = services.get_user_recent_logs(db_session, sample_user)
+    assert len(remaining) == 1
+    assert remaining[0].id == log2.id
+
+
+def test_edit_work_log_and_parse_input(db_session: Session, sample_user: User):
+    """Test modifying existing logs and parsing partial updates."""
+    log = services.add_work_log(db_session, sample_user, "work", "Initial Task", 2.0)
+
+    # Test parse_edit_input for hours only
+    new_type, new_desc, new_hours = services.parse_edit_input(["3.5"], log)
+    assert new_type == "work"
+    assert new_desc == "Initial Task"
+    assert new_hours == 3.5
+
+    # Test parse_edit_input for type change and description
+    new_type2, new_desc2, new_hours2 = services.parse_edit_input(["waste", "Doomscrolling", "1.0"], log)
+    assert new_type2 == "waste"
+    assert new_desc2 == "Doomscrolling"
+    assert new_hours2 == 1.0
+
+    # Apply edit
+    updated = services.edit_work_log(db_session, sample_user, log.id, new_type2, new_desc2, new_hours2)
+    assert updated is not None
+    assert updated.log_type == "waste"
+    assert updated.description == "Doomscrolling"
+    assert updated.hours == 1.0
+

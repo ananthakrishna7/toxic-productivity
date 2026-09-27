@@ -152,10 +152,11 @@ async def test_dayoff_and_cancel_commands(
 
 
 @pytest.mark.asyncio
-async def test_button_callback_handler(
+async def test_button_callback_handler_prompts_description(
     mock_context, make_mock_update, sample_user: User, db_session_factory
 ):
-    """Test inline keyboard button clicks."""
+    """Test inline keyboard button clicks prompt user for task description."""
+    mock_context.user_data = {}
     update = make_mock_update(
         chat_id=sample_user.chat_id,
         is_callback=True,
@@ -165,7 +166,121 @@ async def test_button_callback_handler(
 
     update.callback_query.answer.assert_called_once()
     mock_context.bot.send_message.assert_called_once()
-    assert "Logged 1.0h of Work" in mock_context.bot.send_message.call_args[1]["text"]
+    assert "Logging 1.0h of Work" in mock_context.bot.send_message.call_args[1]["text"]
+    assert mock_context.user_data.get("pending_log") == {"type": "work", "hours": 1.0}
+
+
+@pytest.mark.asyncio
+async def test_text_message_fulfills_pending_description(
+    mock_context, make_mock_update, sample_user: User, db_session_factory
+):
+    """Test sending text description fulfills pending log."""
+    mock_context.user_data = {"pending_log": {"type": "work", "hours": 1.0}}
+    update = make_mock_update(
+        chat_id=sample_user.chat_id,
+        text="Refactored database schema",
+    )
+    await handlers.text_message_handler(update, mock_context)
+
+    mock_context.bot.send_message.assert_called_once()
+    sent_text = mock_context.bot.send_message.call_args[1]["text"]
+    assert "WORK LOGGED" in sent_text
+    assert "Refactored database schema" in sent_text
+    assert "pending_log" not in mock_context.user_data
+
+    # Verify saved in database
+    with db_session_factory() as session:
+        user = services.get_user_by_chat_id(session, sample_user.chat_id)
+        recent = services.get_user_recent_logs(session, user)
+        assert len(recent) == 1
+        assert recent[0].description == "Refactored database schema"
+
+
+@pytest.mark.asyncio
+async def test_skip_description_callback(
+    mock_context, make_mock_update, sample_user: User, db_session_factory
+):
+    """Test tapping Skip Description logs with default task description."""
+    mock_context.user_data = {"pending_log": {"type": "work", "hours": 1.0}}
+    update = make_mock_update(
+        chat_id=sample_user.chat_id,
+        is_callback=True,
+        callback_data="skip_desc_work_1",
+    )
+    await handlers.button_callback_handler(update, mock_context)
+
+    mock_context.bot.send_message.assert_called_once()
+    assert "General Work" in mock_context.bot.send_message.call_args[1]["text"]
+
+
+@pytest.mark.asyncio
+async def test_undo_and_delete_commands(
+    mock_context, make_mock_update, sample_user: User, db_session_factory
+):
+    """Test /undo and /delete commands remove entries from database."""
+    # Add two logs
+    with db_session_factory() as session:
+        user = services.get_user_by_chat_id(session, sample_user.chat_id)
+        log1 = services.add_work_log(session, user, "work", "Task 1", 1.0)
+        log2 = services.add_work_log(session, user, "waste", "Task 2", 2.0)
+
+    # 1. Test /undo (should remove log2)
+    update_undo = make_mock_update(chat_id=sample_user.chat_id, text="/undo")
+    await handlers.undo_command(update_undo, mock_context)
+
+    mock_context.bot.send_message.assert_called_once()
+    assert f"REVERTED ENTRY (ID #{log2.id})" in mock_context.bot.send_message.call_args[1]["text"]
+
+    # 2. Test /delete log1.id
+    mock_context.bot.send_message.reset_mock()
+    update_del = make_mock_update(chat_id=sample_user.chat_id, text=f"/delete {log1.id}")
+    mock_context.args = [str(log1.id)]
+    await handlers.delete_command(update_del, mock_context)
+
+    assert f"DELETED ENTRY (ID #{log1.id})" in mock_context.bot.send_message.call_args[1]["text"]
+
+    # Database should now be empty
+    with db_session_factory() as session:
+        user = services.get_user_by_chat_id(session, sample_user.chat_id)
+        assert len(services.get_user_recent_logs(session, user)) == 0
+
+
+@pytest.mark.asyncio
+async def test_edit_command(
+    mock_context, make_mock_update, sample_user: User, db_session_factory
+):
+    """Test /edit command updates entry values."""
+    with db_session_factory() as session:
+        user = services.get_user_by_chat_id(session, sample_user.chat_id)
+        log = services.add_work_log(session, user, "work", "Old Title", 1.0)
+
+    update = make_mock_update(chat_id=sample_user.chat_id, text=f"/edit {log.id} New Title 2.5")
+    mock_context.args = [str(log.id), "New", "Title", "2.5"]
+    await handlers.edit_command(update, mock_context)
+
+    mock_context.bot.send_message.assert_called_once()
+    sent_text = mock_context.bot.send_message.call_args[1]["text"]
+    assert "UPDATED ENTRY" in sent_text
+    assert "New Title" in sent_text
+    assert "2.5 hrs" in sent_text
+
+
+@pytest.mark.asyncio
+async def test_logs_command(
+    mock_context, make_mock_update, sample_user: User, db_session_factory
+):
+    """Test /logs command lists entries with IDs."""
+    with db_session_factory() as session:
+        user = services.get_user_by_chat_id(session, sample_user.chat_id)
+        services.add_work_log(session, user, "work", "Important Meeting", 1.5)
+
+    update = make_mock_update(chat_id=sample_user.chat_id, text="/logs")
+    await handlers.logs_command(update, mock_context)
+
+    mock_context.bot.send_message.assert_called_once()
+    sent_text = mock_context.bot.send_message.call_args[1]["text"]
+    assert "RECENT ACTIVITY LOGS" in sent_text
+    assert "Important Meeting" in sent_text
 
 
 @pytest.mark.asyncio
